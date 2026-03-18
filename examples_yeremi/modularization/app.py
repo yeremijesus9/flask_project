@@ -1,26 +1,24 @@
-from flask import Flask
-from rutas_modulares import usuarios_bp
+try:
+    from . import create_app
+except ImportError:
+    import os
+    import sys
 
-app = Flask(__name__)
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(BASE_DIR))
 
-app.register_blueprint(usuarios_bp, url_prefix='/usuarios')
+    if PROJECT_ROOT not in sys.path:
+        sys.path.insert(0, PROJECT_ROOT)
 
-@app.route('/')
-def inicio():
-    return """
-        <body style="font-family: sans-serif; max-width: 600px; margin: 40px auto; line-height: 1.6;">
-            <h1> Ejemplo de Modularización</h1>
-            <p>Este ejemplo demuestra cómo separar las rutas en diferentes archivos usando <b>Blueprints</b>.</p>
-            <div style="background: #f4f4f4; padding: 20px; border-radius: 8px;">
-                <h3>Enlaces de prueba:</h3>
-                <ul>
-                    <li><a href="/usuarios/">Ver lista de usuarios (JSON)</a></li>
-                    <li><a href="/usuarios/123">Ver detalle de usuario (Dinámico)</a></li>
-                </ul>
-            </div>
-        </body>
-    """
+    from examples_yeremi.modularization import create_app
 
-if __name__ == '__main__':
-    print("\n✅ Servidor modular arrancado en http://127.0.0.1:5002")
+
+app = create_app()
+
+
+if __name__ == "__main__":
+    print("\n✅ Panel de ejemplos arrancado en http://127.0.0.1:5002")
+    print("Puedes ejecutarlo con:")
+    print("  python examples_yeremi/modularization/app.py")
+    print("  python -m examples_yeremi.modularization.app")
     app.run(debug=True, port=5002)

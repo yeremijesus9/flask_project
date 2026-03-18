@@ -1,25 +1,20 @@
-"""
-=======================================================
-  FLASK + SQLITE - CRUD CON BASE DE DATOS REAL
-=======================================================
-
-En este ejemplo ya no usamos una lista en memoria. Ahora los 
-datos se guardan en un archivo llamado 'inventario.db'.
-
-Si cierras el servidor, ¡tus productos seguirán ahí!
-=======================================================
-"""
-
 import sqlite3
-from flask import Flask, jsonify, request
+from pathlib import Path
 
-app = Flask(__name__)
-DB_NAME = "inventario.db"
+from flask import Blueprint, Flask, jsonify, request
+
+
+sqlite_bp = Blueprint("sqlite_demo", __name__)
+DB_PATH = Path(__file__).resolve().with_name("inventario.db")
+PRODUCTOS_INICIALES_SQLITE = [
+    ("Camara Web", 210),
+    ("Auriculares", 450),
+    ("Microfono USB", 690),
+]
 
 
 def init_db():
-    """Crea la tabla si no existe al arrancar la app."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS productos (
@@ -29,173 +24,329 @@ def init_db():
             )
             """
         )
-    print("✅ Base de datos inicializada")
+
+        total = conn.execute("SELECT COUNT(*) FROM productos").fetchone()[0]
+        if total == 0:
+            conn.executemany(
+                "INSERT INTO productos (nombre, precio) VALUES (?, ?)",
+                PRODUCTOS_INICIALES_SQLITE,
+            )
+            return
+
+        # Si la base tenia los datos viejos del CRUD, los cambiamos
+        # por los de SQLite para diferenciar ambos ejemplos.
+        nombres_actuales = [
+            fila[0]
+            for fila in conn.execute(
+                "SELECT nombre FROM productos ORDER BY id"
+            ).fetchall()
+        ]
+        if nombres_actuales == ["Laptop", "Mouse", "Teclado"]:
+            conn.execute("DELETE FROM productos")
+            conn.executemany(
+                "INSERT INTO productos (nombre, precio) VALUES (?, ?)",
+                PRODUCTOS_INICIALES_SQLITE,
+            )
 
 
-def dict_factory(cursor, row):
-    """Convierte las filas de la DB en diccionarios para jsonify."""
-    d = {}
-    for idx, col in enumerate(cursor.description):
-        d[col[0]] = row[idx]
-    return d
-
-
-def get_db_connection():
-    """Abre una conexión a la base de datos."""
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = dict_factory  # Esto permite acceder por nombre: producto['nombre']
+def get_conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
     return conn
 
 
-@app.route("/")
-def inicio():
-    conn = get_db_connection()
-    productos = conn.execute("SELECT * FROM productos ORDER BY id").fetchall()
-    conn.close()
-
-    filas_html = ""
+def filas_html(productos):
+    filas = ""
     for producto in productos:
-        filas_html += f"""
+        filas += f"""
             <tr>
-                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{producto['id']}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{producto['nombre']}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{producto['precio']}</td>
+                <td>{producto["id"]}</td>
+                <td>{producto["nombre"]}</td>
+                <td>{producto["precio"]}</td>
             </tr>
         """
+    return filas
 
-    if not filas_html:
-        filas_html = """
-            <tr>
-                <td colspan="3" style="padding: 16px; text-align: center; color: #6b7280;">
-                    No hay productos guardados todavía.
-                </td>
-            </tr>
-        """
 
+def pagina_principal(productos):
     return f"""
-        <body style="font-family: sans-serif; max-width: 850px; margin: 40px auto; line-height: 1.6; background: #f0f4f8;">
-            <h1 style="color: #2c3e50;">SQLite + Flask: CRUD Persistente</h1>
-            <p>Los datos ahora se guardan en <b>inventario.db</b>.</p>
+    <html>
+    <head>
+        <style>
+            body {{
+                font-family: sans-serif;
+                max-width: 920px;
+                margin: 32px auto;
+                background: #f7fafc;
+                color: #1f2937;
+            }}
+            .titulo {{
+                margin-bottom: 8px;
+            }}
+            .subtitulo {{
+                margin-top: 0;
+                color: #475569;
+            }}
+            .grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                gap: 12px;
+                margin: 18px 0;
+            }}
+            .bloque {{
+                border-radius: 12px;
+                padding: 14px;
+                font-weight: 700;
+            }}
+            .c {{ background: #d9f99d; }}
+            .r {{ background: #bfdbfe; }}
+            .u {{ background: #fde68a; }}
+            .d {{ background: #fecaca; }}
+            .card {{
+                background: white;
+                border: 1px solid #dbe4ee;
+                border-radius: 14px;
+                padding: 16px;
+                margin-top: 14px;
+            }}
+            .zona-demo {{
+                display: grid;
+                gap: 10px;
+            }}
+            .fila {{
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                align-items: center;
+            }}
+            input {{
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                padding: 8px 10px;
+            }}
+            button {{
+                border: 0;
+                border-radius: 8px;
+                padding: 8px 12px;
+                background: #2563eb;
+                color: white;
+                cursor: pointer;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+            }}
+            th, td {{
+                text-align: left;
+                padding: 10px;
+                border-bottom: 1px solid #e5e7eb;
+            }}
+            th {{
+                background: #f1f5f9;
+            }}
+            pre {{
+                background: #0f172a;
+                color: #e2e8f0;
+                padding: 12px;
+                border-radius: 10px;
+                overflow-x: auto;
+            }}
+            a {{
+                color: #1d4ed8;
+            }}
+        </style>
+    </head>
+    <body>
+        <a href="/">Volver al panel</a>
+        <h1 class="titulo">SQLite</h1>
+        <p class="subtitulo">Es igual al CRUD, pero aqui usamos productos distintos para identificar rapido que es base de datos real.</p>
 
-            <div style="background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 24px;">
-                <h3 style="margin-top: 0;">Productos guardados</h3>
-                <table style="width: 100%; border-collapse: collapse; background: #ffffff;">
-                    <thead>
-                        <tr style="background: #eef2f7; text-align: left;">
-                            <th style="padding: 12px;">ID</th>
-                            <th style="padding: 12px;">Nombre</th>
-                            <th style="padding: 12px;">Precio</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filas_html}
-                    </tbody>
-                </table>
-            </div>
+        <div class="grid">
+            <div class="bloque c">Create<br><small>POST /productos</small></div>
+            <div class="bloque r">Read<br><small>GET /productos</small></div>
+            <div class="bloque u">Update<br><small>PUT /productos/1</small></div>
+            <div class="bloque d">Delete<br><small>DELETE /productos/1</small></div>
+        </div>
 
-            <div style="background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <h3 style="margin-top: 0;">Rutas de la API</h3>
-                <code style="display: block; background: #2d3436; color: #fab1a0; padding: 15px; border-radius: 8px;">
-                    GET    /productos          -> Listar todos<br>
-                    GET    /productos/&lt;id&gt;     -> Buscar uno<br>
-                    POST   /productos          -> Crear (enviar JSON)<br>
-                    PUT    /productos/&lt;id&gt;     -> Editar<br>
-                    DELETE /productos/&lt;id&gt;     -> Borrar
-                </code>
+        <div class="card">
+            <h3>Productos guardados en SQLite</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nombre</th>
+                        <th>Precio</th>
+                    </tr>
+                </thead>
+                <tbody>{filas_html(productos)}</tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>Rutas para probar</h3>
+            <ul>
+                <li><b>GET</b> <a href="productos">/productos</a></li>
+                <li><b>GET</b> <a href="productos/1">/productos/1</a></li>
+                <li><b>POST</b> /productos</li>
+                <li><b>PUT</b> /productos/1</li>
+                <li><b>DELETE</b> /productos/1</li>
+            </ul>
+            <p>JSON para POST o PUT:</p>
+            <pre>{{
+  "nombre": "Monitor",
+  "precio": 799
+}}</pre>
+        </div>
+
+        <div class="card">
+            <h3>Prueba aqui mismo (funcional)</h3>
+            <div class="zona-demo">
+                <form id="form-crear" class="fila">
+                    <b>POST</b>
+                    <input id="crear-nombre" placeholder="nombre" required />
+                    <input id="crear-precio" type="number" placeholder="precio" required />
+                    <button type="submit">Crear</button>
+                </form>
+
+                <form id="form-actualizar" class="fila">
+                    <b>PUT</b>
+                    <input id="act-id" type="number" placeholder="id" required />
+                    <input id="act-nombre" placeholder="nombre" required />
+                    <input id="act-precio" type="number" placeholder="precio" required />
+                    <button type="submit">Actualizar</button>
+                </form>
+
+                <form id="form-eliminar" class="fila">
+                    <b>DELETE</b>
+                    <input id="del-id" type="number" placeholder="id" required />
+                    <button type="submit" style="background:#dc2626;">Eliminar</button>
+                </form>
             </div>
-        </body>
+            <p>Respuesta API:</p>
+            <pre id="salida-api">Aqui veras el resultado en JSON.</pre>
+        </div>
+
+        <script>
+            async function llamarApi(url, metodo, data) {{
+                const opciones = {{
+                    method: metodo,
+                    headers: {{"Content-Type": "application/json"}}
+                }};
+
+                if (data) {{
+                    opciones.body = JSON.stringify(data);
+                }}
+
+                const resp = await fetch(url, opciones);
+                const json = await resp.json();
+                document.getElementById("salida-api").textContent = JSON.stringify(json, null, 2);
+
+                if (resp.ok) {{
+                    setTimeout(function () {{
+                        window.location.reload();
+                    }}, 700);
+                }}
+            }}
+
+            document.getElementById("form-crear").addEventListener("submit", function (e) {{
+                e.preventDefault();
+                const nombre = document.getElementById("crear-nombre").value;
+                const precio = Number(document.getElementById("crear-precio").value);
+                llamarApi("productos", "POST", {{nombre: nombre, precio: precio}});
+            }});
+
+            document.getElementById("form-actualizar").addEventListener("submit", function (e) {{
+                e.preventDefault();
+                const id = document.getElementById("act-id").value;
+                const nombre = document.getElementById("act-nombre").value;
+                const precio = Number(document.getElementById("act-precio").value);
+                llamarApi("productos/" + id, "PUT", {{nombre: nombre, precio: precio}});
+            }});
+
+            document.getElementById("form-eliminar").addEventListener("submit", function (e) {{
+                e.preventDefault();
+                const id = document.getElementById("del-id").value;
+                llamarApi("productos/" + id, "DELETE");
+            }});
+        </script>
+    </body>
+    </html>
     """
 
 
-# -------------------------------------------------------
-# READ - LISTAR TODOS
-# -------------------------------------------------------
-@app.route("/productos", methods=["GET"])
-def listar_productos():
-    conn = get_db_connection()
-    productos = conn.execute("SELECT * FROM productos").fetchall()
+@sqlite_bp.route("/")
+def inicio():
+    conn = get_conn()
+    productos = conn.execute("SELECT * FROM productos ORDER BY id").fetchall()
     conn.close()
+    return pagina_principal(productos)
 
+
+@sqlite_bp.route("/productos", methods=["GET"])
+def listar_productos():
+    conn = get_conn()
+    productos = conn.execute("SELECT * FROM productos ORDER BY id").fetchall()
+    conn.close()
     return jsonify(
         {
-            "mensaje": "Productos desde SQLite",
+            "mensaje": "Lista de productos",
             "total": len(productos),
-            "data": productos,
+            "data": [dict(p) for p in productos],
         }
     )
 
 
-# -------------------------------------------------------
-# READ - OBTENER UNO
-# -------------------------------------------------------
-@app.route("/productos/<int:producto_id>", methods=["GET"])
+@sqlite_bp.route("/productos/<int:producto_id>", methods=["GET"])
 def obtener_producto(producto_id):
-    conn = get_db_connection()
+    conn = get_conn()
     producto = conn.execute(
-        "SELECT * FROM productos WHERE id = ?", (producto_id,)
+        "SELECT * FROM productos WHERE id = ?",
+        (producto_id,),
     ).fetchone()
     conn.close()
 
     if not producto:
         return jsonify({"error": "Producto no encontrado"}), 404
 
-    return jsonify({"data": producto})
+    return jsonify({"mensaje": "Producto encontrado", "data": dict(producto)})
 
 
-# -------------------------------------------------------
-# CREATE - INSERTAR EN DB
-# -------------------------------------------------------
-@app.route("/productos", methods=["POST"])
+@sqlite_bp.route("/productos", methods=["POST"])
 def crear_producto():
-    datos = request.get_json(silent=True)
-    if not datos or "nombre" not in datos or "precio" not in datos:
-        return jsonify({"error": "Faltan datos (nombre, precio)"}), 400
+    datos = request.get_json(silent=True) or {}
+    nombre = datos.get("nombre")
+    precio = datos.get("precio")
 
-    nombre = datos["nombre"]
-    precio = datos["precio"]
+    if not nombre or precio is None:
+        return jsonify({"error": "Debes enviar nombre y precio"}), 400
 
-    conn = get_db_connection()
+    conn = get_conn()
     cursor = conn.execute(
-        "INSERT INTO productos (nombre, precio) VALUES (?, ?)", (nombre, precio)
+        "INSERT INTO productos (nombre, precio) VALUES (?, ?)",
+        (nombre, precio),
     )
     conn.commit()
-    nuevo_id = cursor.lastrowid
     conn.close()
 
-    return (
-        jsonify(
-            {
-                "mensaje": "Guardado en SQLite!",
-                "data": {"id": nuevo_id, "nombre": nombre, "precio": precio},
-            }
-        ),
-        201,
-    )
+    return jsonify({"mensaje": "Producto creado", "data": {"id": cursor.lastrowid, "nombre": nombre, "precio": precio}}), 201
 
 
-# -------------------------------------------------------
-# UPDATE - ACTUALIZAR FILA
-# -------------------------------------------------------
-@app.route("/productos/<int:producto_id>", methods=["PUT"])
+@sqlite_bp.route("/productos/<int:producto_id>", methods=["PUT"])
 def actualizar_producto(producto_id):
-    datos = request.get_json(silent=True)
-    if not datos:
-        return jsonify({"error": "JSON requerido"}), 400
+    datos = request.get_json(silent=True) or {}
 
-    conn = get_db_connection()
-    # Verificamos si existe
+    conn = get_conn()
     producto = conn.execute(
-        "SELECT * FROM productos WHERE id = ?", (producto_id,)
+        "SELECT * FROM productos WHERE id = ?",
+        (producto_id,),
     ).fetchone()
 
     if not producto:
         conn.close()
-        return jsonify({"error": "No existe ese producto"}), 404
+        return jsonify({"error": "Producto no encontrado"}), 404
 
-    # Solo actualizamos los campos que vengan en el JSON
     nombre = datos.get("nombre", producto["nombre"])
     precio = datos.get("precio", producto["precio"])
-
     conn.execute(
         "UPDATE productos SET nombre = ?, precio = ? WHERE id = ?",
         (nombre, precio, producto_id),
@@ -203,28 +354,35 @@ def actualizar_producto(producto_id):
     conn.commit()
     conn.close()
 
-    return jsonify({"mensaje": "Producto actualizado", "id": producto_id})
+    return jsonify({"mensaje": "Producto actualizado", "data": {"id": producto_id, "nombre": nombre, "precio": precio}})
 
 
-# -------------------------------------------------------
-# DELETE - ELIMINAR FILA
-# -------------------------------------------------------
-@app.route("/productos/<int:producto_id>", methods=["DELETE"])
+@sqlite_bp.route("/productos/<int:producto_id>", methods=["DELETE"])
 def eliminar_producto(producto_id):
-    conn = get_db_connection()
-    cursor = conn.execute("DELETE FROM productos WHERE id = ?", (producto_id,))
+    conn = get_conn()
+    producto = conn.execute(
+        "SELECT * FROM productos WHERE id = ?",
+        (producto_id,),
+    ).fetchone()
+
+    if not producto:
+        conn.close()
+        return jsonify({"error": "Producto no encontrado"}), 404
+
+    conn.execute("DELETE FROM productos WHERE id = ?", (producto_id,))
     conn.commit()
-
-    filas_afectadas = cursor.rowcount
     conn.close()
+    return jsonify({"mensaje": "Producto eliminado", "data": dict(producto)})
 
-    if filas_afectadas == 0:
-        return jsonify({"error": "No se encontró el producto para borrar"}), 404
 
-    return jsonify({"mensaje": "Producto eliminado de la base de datos"})
+def create_app():
+    app = Flask(__name__)
+    init_db()
+    app.register_blueprint(sqlite_bp)
+    return app
 
 
 if __name__ == "__main__":
-    init_db()  # Importante: Crea la tabla al iniciar
-    print("\n🚀 Servidor SQLite arrancado en http://127.0.0.1:5004")
+    app = create_app()
+    print("\n✅ Servidor SQLite en http://127.0.0.1:5004")
     app.run(debug=True, port=5004)
