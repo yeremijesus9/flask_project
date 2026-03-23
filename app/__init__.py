@@ -3,6 +3,7 @@ from flask import Flask, jsonify
 from dotenv import load_dotenv
 from app.extensions import db, jwt, bcrypt, cors
 from app.config import config_by_name
+from app.core.errors import register_error_handlers
 from datetime import timedelta
 
 load_dotenv()
@@ -40,6 +41,9 @@ def create_app(config_name=None):
             }
         }
     )
+    
+    # Register error handlers
+    register_error_handlers(app)
     
     # Import models explicitly so SQLAlchemy knows they exist
     from app.api.auth.models import User, TokenBlocklist
