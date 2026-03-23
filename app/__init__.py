@@ -3,6 +3,7 @@ from flask import Flask, jsonify
 from dotenv import load_dotenv
 from app.extensions import db, jwt, bcrypt
 from app.config import config_by_name
+from datetime import timedelta
 
 load_dotenv()
 
@@ -16,9 +17,8 @@ def create_app(config_name=None):
     app.config.from_object(config_by_name[config_name])
     
     # Configure JWT Specifics (These could also go to config.py later)
-    app.config['JWT_TOKEN_LOCATION'] = ['cookies']
-    app.config['JWT_COOKIE_SECURE'] = False # True en producción con HTTPS
-    app.config['JWT_COOKIE_CSRF_PROTECT'] = True # Activamos CSRF Protection via Cookies
+    app.config['JWT_TOKEN_LOCATION'] = ['headers']
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
     
     # Init Extensions
     db.init_app(app)
@@ -51,9 +51,8 @@ def create_app(config_name=None):
     @app.route('/protected', methods=['GET'])
     @jwt_required()
     def protected():
-        # Accessed only if a valid access_token is present in cookies/header
         current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        user = db.session.get(User, current_user_id)
         return jsonify(
             msg="¡Accediste a una ruta segura verificando tokens!",
             user=user.username

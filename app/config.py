@@ -13,7 +13,7 @@ class DevelopmentConfig(Config):
 class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
-    JWT_COOKIE_CSRF_PROTECT = False
+    JWT_SECRET_KEY = 'test_secret_key_with_32_chars_min!'
 
 class ProductionConfig(Config):
     SQLALCHEMY_DATABASE_URI = os.environ.get('SQLALCHEMY_DATABASE_URI')

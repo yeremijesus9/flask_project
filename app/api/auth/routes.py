@@ -1,4 +1,5 @@
 from flask import Blueprint, request
+from datetime import datetime, timezone, timedelta
 from app.api.auth.services import AuthService
 from app.core.utils import success_response, error_response
 from app.core.exceptions import APIException
@@ -6,9 +7,8 @@ from flask_jwt_extended import (
     get_jwt_identity,
     jwt_required,
     get_jwt,
-    set_access_cookies,
-    set_refresh_cookies,
-    unset_jwt_cookies
+    create_access_token,
+    create_refresh_token
 )
 
 # Blueprint prefix will be handled on register in app.__init__.py
@@ -35,12 +35,18 @@ def login():
     user = AuthService.verify_credentials(data['username'], data['password'])
     
     if user:
-        access_token, refresh_token = AuthService.generate_tokens(user.id)
+        access_token = create_access_token(identity=str(user.id))
+        refresh_token = create_refresh_token(identity=str(user.id))
         
-        # Como se decidió en la revision, las respuestas web usan HttpOnly Cookies
-        resp, code = success_response(data={'login': True}, message="Login exitoso")
-        set_access_cookies(resp, access_token)
-        set_refresh_cookies(resp, refresh_token)
+        resp, code = success_response(
+            data={
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'expires_in': 3600,
+                'login': True
+            },
+            message="Login exitoso"
+        )
         return resp, code
 
     return error_response("Credenciales inválidas", status_code=401)
@@ -51,24 +57,29 @@ def logout():
     jti = get_jwt()["jti"]
     AuthService.revoke_token(jti)
     
-    resp, code = success_response(message="Logout exitoso")
-    unset_jwt_cookies(resp)
-    return resp, code
+    return success_response(message="Logout exitoso")
 
-@bp.route('/refresh', methods=['POST'])
-@jwt_required(refresh=True)
-def refresh():
-    current_user_id = get_jwt_identity()
-    current_refresh_jti = get_jwt()["jti"]
+@bp.route('/keep-alive', methods=['POST'])
+@jwt_required()
+def keep_alive():
+    jwt_data = get_jwt()
+    exp_timestamp = jwt_data["exp"]
+    current_timestamp = datetime.now(timezone.utc).timestamp()
+    seconds_remaining = exp_timestamp - current_timestamp
     
-    # Revocar viejo token
-    AuthService.revoke_token(current_refresh_jti)
+    response_data = {
+        "valid": True,
+        "expires_in": int(seconds_remaining),
+        "new_token": None
+    }
     
-    # Generar nuevos
-    new_access_token, new_refresh_token = AuthService.generate_tokens(current_user_id)
+    if seconds_remaining < 300:
+        user_id = get_jwt_identity()
+        new_token = create_access_token(identity=user_id)
+        response_data["new_token"] = new_token
+        response_data["expires_in"] = 3600
+        response_data["renewed"] = True
+    else:
+        response_data["renewed"] = False
     
-    resp, code = success_response(message="Tokens refrescados por rotación activa")
-    set_access_cookies(resp, new_access_token)
-    set_refresh_cookies(resp, new_refresh_token)
-    
-    return resp, code
+    return success_response(data=response_data)
