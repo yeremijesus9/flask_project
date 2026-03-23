@@ -1,7 +1,7 @@
 import os
 from flask import Flask, jsonify
 from dotenv import load_dotenv
-from app.extensions import db, jwt, bcrypt
+from app.extensions import db, jwt, bcrypt, cors
 from app.config import config_by_name
 from datetime import timedelta
 
@@ -24,6 +24,22 @@ def create_app(config_name=None):
     db.init_app(app)
     jwt.init_app(app)
     bcrypt.init_app(app)
+    
+    # Init CORS
+    cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000')
+    origins_list = [o.strip() for o in cors_origins.split(',') if o.strip()]
+    
+    cors.init_app(app, 
+        resources={
+            r"/*": {
+                "origins": origins_list,
+                "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization"],
+                "supports_credentials": True,
+                "max_age": 3600
+            }
+        }
+    )
     
     # Import models explicitly so SQLAlchemy knows they exist
     from app.api.auth.models import User, TokenBlocklist
