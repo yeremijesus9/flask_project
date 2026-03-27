@@ -1,25 +1,64 @@
+import sqlite3
+from pathlib import Path
+
 from flask import Blueprint, Flask, jsonify, request
 
+bp = Blueprint("sqlite_demo", __name__)
 
-crud_bp = Blueprint("crud_demo", __name__)
-
-PRODUCTOS = [
-    {"id": 1, "nombre": "Laptop", "precio": 3500},
-    {"id": 2, "nombre": "Mouse", "precio": 80},
-    {"id": 3, "nombre": "Teclado", "precio": 120},
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent
+DB_PATH = BASE_DIR / "instance" / "project.sqlite"
+PRODUCTOS_INICIALES_SQLITE = [
+    ("Camara Web", 210),
+    ("Auriculares", 450),
+    ("Microfono USB", 690),
 ]
 
 
-def buscar_producto(producto_id):
-    for producto in PRODUCTOS:
-        if producto["id"] == producto_id:
-            return producto
-    return None
+def init_db():
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS productos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                precio REAL NOT NULL
+            )
+            """
+        )
+
+        total = conn.execute("SELECT COUNT(*) FROM productos").fetchone()[0]
+        if total == 0:
+            conn.executemany(
+                "INSERT INTO productos (nombre, precio) VALUES (?, ?)",
+                PRODUCTOS_INICIALES_SQLITE,
+            )
+            return
+
+        # Si la base tenia los datos viejos del CRUD, los cambiamos
+        # por los de SQLite para diferenciar ambos ejemplos.
+        nombres_actuales = [
+            fila[0]
+            for fila in conn.execute(
+                "SELECT nombre FROM productos ORDER BY id"
+            ).fetchall()
+        ]
+        if nombres_actuales == ["Laptop", "Mouse", "Teclado"]:
+            conn.execute("DELETE FROM productos")
+            conn.executemany(
+                "INSERT INTO productos (nombre, precio) VALUES (?, ?)",
+                PRODUCTOS_INICIALES_SQLITE,
+            )
 
 
-def construir_filas():
+def get_conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def filas_html(productos):
     filas = ""
-    for producto in PRODUCTOS:
+    for producto in productos:
         filas += f"""
             <tr>
                 <td>{producto["id"]}</td>
@@ -30,7 +69,7 @@ def construir_filas():
     return filas
 
 
-def pagina_principal():
+def pagina_principal(productos):
     return f"""
     <html>
     <head>
@@ -119,9 +158,9 @@ def pagina_principal():
         </style>
     </head>
     <body>
-        <a href="/">Volver al panel</a>
-        <h1 class="titulo">CRUD</h1>
-        <p class="subtitulo">Misma idea, poco código: crear, leer, actualizar y borrar.</p>
+        <a href="/examples-yeremi">Volver al panel</a>
+        <h1 class="titulo">SQLite</h1>
+        <p class="subtitulo">Es igual al CRUD, pero aqui usamos productos distintos para identificar rapido que es base de datos real.</p>
 
         <div class="grid">
             <div class="bloque c">Create<br><small>POST /productos</small></div>
@@ -131,7 +170,7 @@ def pagina_principal():
         </div>
 
         <div class="card">
-            <h3>Productos actuales</h3>
+            <h3>Productos guardados en SQLite</h3>
             <table>
                 <thead>
                     <tr>
@@ -140,9 +179,7 @@ def pagina_principal():
                         <th>Precio</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {construir_filas()}
-                </tbody>
+                <tbody>{filas_html(productos)}</tbody>
             </table>
         </div>
 
@@ -238,25 +275,44 @@ def pagina_principal():
     """
 
 
-@crud_bp.route("/")
+@bp.route("/")
 def inicio():
-    return pagina_principal()
+    conn = get_conn()
+    productos = conn.execute("SELECT * FROM productos ORDER BY id").fetchall()
+    conn.close()
+    return pagina_principal(productos)
 
 
-@crud_bp.route("/productos", methods=["GET"])
+@bp.route("/productos", methods=["GET"])
 def listar_productos():
-    return jsonify({"mensaje": "Lista de productos", "total": len(PRODUCTOS), "data": PRODUCTOS})
+    conn = get_conn()
+    productos = conn.execute("SELECT * FROM productos ORDER BY id").fetchall()
+    conn.close()
+    return jsonify(
+        {
+            "mensaje": "Lista de productos",
+            "total": len(productos),
+            "data": [dict(p) for p in productos],
+        }
+    )
 
 
-@crud_bp.route("/productos/<int:producto_id>", methods=["GET"])
+@bp.route("/productos/<int:producto_id>", methods=["GET"])
 def obtener_producto(producto_id):
-    producto = buscar_producto(producto_id)
+    conn = get_conn()
+    producto = conn.execute(
+        "SELECT * FROM productos WHERE id = ?",
+        (producto_id,),
+    ).fetchone()
+    conn.close()
+
     if not producto:
         return jsonify({"error": "Producto no encontrado"}), 404
-    return jsonify({"mensaje": "Producto encontrado", "data": producto})
+
+    return jsonify({"mensaje": "Producto encontrado", "data": dict(producto)})
 
 
-@crud_bp.route("/productos", methods=["POST"])
+@bp.route("/productos", methods=["POST"])
 def crear_producto():
     datos = request.get_json(silent=True) or {}
     nombre = datos.get("nombre")
@@ -265,44 +321,56 @@ def crear_producto():
     if not nombre or precio is None:
         return jsonify({"error": "Debes enviar nombre y precio"}), 400
 
-    nuevo = {
-        "id": max((producto["id"] for producto in PRODUCTOS), default=0) + 1,
-        "nombre": nombre,
-        "precio": precio,
-    }
-    PRODUCTOS.append(nuevo)
-    return jsonify({"mensaje": "Producto creado", "data": nuevo}), 201
+    conn = get_conn()
+    cursor = conn.execute(
+        "INSERT INTO productos (nombre, precio) VALUES (?, ?)",
+        (nombre, precio),
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify({"mensaje": "Producto creado", "data": {"id": cursor.lastrowid, "nombre": nombre, "precio": precio}}), 201
 
 
-@crud_bp.route("/productos/<int:producto_id>", methods=["PUT"])
+@bp.route("/productos/<int:producto_id>", methods=["PUT"])
 def actualizar_producto(producto_id):
-    producto = buscar_producto(producto_id)
-    if not producto:
-        return jsonify({"error": "Producto no encontrado"}), 404
-
     datos = request.get_json(silent=True) or {}
-    producto["nombre"] = datos.get("nombre", producto["nombre"])
-    producto["precio"] = datos.get("precio", producto["precio"])
-    return jsonify({"mensaje": "Producto actualizado", "data": producto})
 
+    conn = get_conn()
+    producto = conn.execute(
+        "SELECT * FROM productos WHERE id = ?",
+        (producto_id,),
+    ).fetchone()
 
-@crud_bp.route("/productos/<int:producto_id>", methods=["DELETE"])
-def eliminar_producto(producto_id):
-    producto = buscar_producto(producto_id)
     if not producto:
+        conn.close()
         return jsonify({"error": "Producto no encontrado"}), 404
 
-    PRODUCTOS.remove(producto)
-    return jsonify({"mensaje": "Producto eliminado", "data": producto})
+    nombre = datos.get("nombre", producto["nombre"])
+    precio = datos.get("precio", producto["precio"])
+    conn.execute(
+        "UPDATE productos SET nombre = ?, precio = ? WHERE id = ?",
+        (nombre, precio, producto_id),
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify({"mensaje": "Producto actualizado", "data": {"id": producto_id, "nombre": nombre, "precio": precio}})
 
 
-def create_app():
-    app = Flask(__name__)
-    app.register_blueprint(crud_bp)
-    return app
+@bp.route("/productos/<int:producto_id>", methods=["DELETE"])
+def eliminar_producto(producto_id):
+    conn = get_conn()
+    producto = conn.execute(
+        "SELECT * FROM productos WHERE id = ?",
+        (producto_id,),
+    ).fetchone()
 
+    if not producto:
+        conn.close()
+        return jsonify({"error": "Producto no encontrado"}), 404
 
-if __name__ == "__main__":
-    app = create_app()
-    print("\n✅ Servidor CRUD en http://127.0.0.1:5003")
-    app.run(debug=True, port=5003)
+    conn.execute("DELETE FROM productos WHERE id = ?", (producto_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"mensaje": "Producto eliminado", "data": dict(producto)})

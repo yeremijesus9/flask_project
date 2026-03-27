@@ -1,20 +1,21 @@
-from flask import Blueprint, Flask, jsonify, request
+from flask import Blueprint, jsonify, request
 
+from app.core.utils import success_response
 
-routes_bp = Blueprint("routes_demo", __name__)
+bp = Blueprint('examples_routes', __name__)
 
-PRODUCTS = {
+PRODUCTS_DATA = {
     1: {"name": "Laptop", "price": 999.99},
     2: {"name": "Mouse", "price": 25.50},
     3: {"name": "Keyboard", "price": 45.00},
 }
 
 
-@routes_bp.route("/")
+@bp.route("/")
 def home():
     return """
         <body style="font-family: sans-serif; max-width: 820px; margin: 40px auto; line-height: 1.6; background: #fffaf8;">
-            <a href="/" style="color: #333;">← Volver al panel</a>
+            <a href="/examples-yeremi" style="color: #333;">← Volver al panel</a>
             <h1>Ejemplo de Rutas</h1>
             <p>Esta pagina junta los tipos de rutas mas utiles en una vista pequena y visual.</p>
 
@@ -28,7 +29,7 @@ def home():
             <div style="background: white; border: 1px solid #eadfcb; border-radius: 14px; padding: 18px; margin-top: 18px;">
                 <h3 style="margin-top: 0;">Extra</h3>
                 <p>La ruta <b>/students</b> acepta <b>GET</b> y <b>POST</b>.</p>
-                <pre style="background: #222; color: #fff; padding: 14px; border-radius: 10px;">POST /examples/routes/students
+                <pre style="background: #222; color: #fff; padding: 14px; border-radius: 10px;">POST /examples-yeremi/routes/students
 {
   "name": "Lucia"
 }</pre>
@@ -37,55 +38,39 @@ def home():
     """
 
 
-@routes_bp.route("/hello")
+@bp.route("/hello")
 def hello():
-    return jsonify({"message": "Hola desde una ruta simple"})
+    return success_response(message="Hola desde una ruta simple")
 
 
-@routes_bp.route("/user/<name>")
+@bp.route("/user/<name>")
 def user(name):
-    return jsonify({"message": f"Hola, {name}"})
+    return success_response(message=f"Hola, {name}")
 
 
-@routes_bp.route("/product/<int:product_id>")
+@bp.route("/product/<int:product_id>")
 def product(product_id):
-    product_data = PRODUCTS.get(product_id)
-
+    product_data = PRODUCTS_DATA.get(product_id)
     if not product_data:
-        return jsonify({"error": "Producto no encontrado"}), 404
+        return success_response(message="Producto no encontrado", status_code=404)
+    return success_response(data={"id": product_id, "product": product_data})
 
-    return jsonify({"id": product_id, "product": product_data})
 
-
-@routes_bp.route("/students", methods=["GET", "POST"])
+@bp.route("/students", methods=["GET", "POST"])
 def students():
     if request.method == "GET":
-        return jsonify(
-            {
-                "students": [
-                    {"id": 1, "name": "Yeremi"},
-                    {"id": 2, "name": "German"},
-                ]
-            }
-        )
-
-    data = request.get_json(silent=True) or {}
-    return jsonify({"created": data}), 201
+        return success_response(data={
+            "students": [
+                {"id": 1, "name": "Yeremi"},
+                {"id": 2, "name": "German"},
+            ]
+        })
+    
+    data = request.get_json() or {}
+    return success_response(data=data, message="Estudiante creado", status_code=201)
 
 
-@routes_bp.route("/search")
+@bp.route("/search")
 def search():
     term = request.args.get("q", "sin termino")
-    return jsonify({"search": term})
-
-
-def create_app():
-    app = Flask(__name__)
-    app.register_blueprint(routes_bp)
-    return app
-
-
-if __name__ == "__main__":
-    app = create_app()
-    print("\n✅ Servidor de rutas en http://127.0.0.1:5001")
-    app.run(debug=True, port=5001)
+    return success_response(data={"search": term})
