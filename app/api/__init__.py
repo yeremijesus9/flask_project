@@ -1,7 +1,11 @@
 from flask import Blueprint
 
-api_bp = Blueprint('api', __name__, url_prefix='/api')
+api_bp = Blueprint('api', __name__)
 
-# Import modules and register them to the main API blueprint
-from app.api.auth.routes import bp as auth_bp
-api_bp.register_blueprint(auth_bp, url_prefix='/auth')
+from app.api.auth import auth_bp
+from app.api.examples_yeremi import examples_yeremi_bp
+from app.api.main import main_bp
+
+api_bp.register_blueprint(main_bp)
+api_bp.register_blueprint(auth_bp)
+api_bp.register_blueprint(examples_yeremi_bp)

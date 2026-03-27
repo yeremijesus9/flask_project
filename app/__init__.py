@@ -46,7 +46,8 @@ def create_app(config_name=None):
     register_error_handlers(app)
     
     # Import models explicitly so SQLAlchemy knows they exist
-    from app.api.auth.models import User, TokenBlocklist
+    from app.api.auth.models import Users, TokenBlocklist
+    from app.api.examples_yeremi.modularization.users.models import UsersProfile
     
     # Import and register Blueprints
     from app.api import api_bp
@@ -61,21 +62,5 @@ def create_app(config_name=None):
 
     with app.app_context():
         db.create_all()
-
-    @app.route('/')
-    def hello_world():
-        return jsonify(message='Server is running')
-        
-    from flask_jwt_extended import jwt_required, get_jwt_identity
-    
-    @app.route('/protected', methods=['GET'])
-    @jwt_required()
-    def protected():
-        current_user_id = get_jwt_identity()
-        user = db.session.get(User, current_user_id)
-        return jsonify(
-            msg="¡Accediste a una ruta segura verificando tokens!",
-            user=user.username
-        )
 
     return app
