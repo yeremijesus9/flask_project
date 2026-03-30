@@ -1,10 +1,4 @@
-from flask import Flask
-from datetime import datetime
-
-app = Flask(__name__)
-
-@app.route('/animacion-reloj')
-def animacion():
+def animacion_reloj():
     return """
     <style>
         body { 
@@ -44,6 +38,3 @@ def animacion():
         actualizarReloj(); // Ejecución inmediata al cargar
     </script>
     """
-
-if __name__ == '__main__':
-    app.run(debug=True)

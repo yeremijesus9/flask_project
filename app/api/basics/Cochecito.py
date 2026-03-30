@@ -1,8 +1,4 @@
-from flask import Flask
 
-app = Flask(__name__)
-
-@app.route('/animacion-coche')
 def animacion():
     return """
     <style>
@@ -32,6 +28,3 @@ def animacion():
     <div class="carretera"></div>
     <div class="coche">🚗💨</div>
     """
-
-if __name__ == '__main__':
-    app.run(debug=True)
