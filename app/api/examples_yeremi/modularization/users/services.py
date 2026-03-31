@@ -1,4 +1,4 @@
-from app.extensions import db
+from app.core.extensions import db
 from app.api.examples_yeremi.modularization.users.models import UsersProfile
 from app.api.auth.models import Users
 

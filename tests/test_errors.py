@@ -76,9 +76,37 @@ class ErrorHandlingTestCase(unittest.TestCase):
         res = self.client.get('/protected', headers={
             'Authorization': 'Bearer invalid_token_format'
         })
-        self.assertIn(res.status_code, [401, 422])
+        self.assertEqual(res.status_code, 401)
         data = json.loads(res.data)
-        self.assertIn('msg', data)
+        self.assertIn('message', data)
+        self.assertIn('error', data)
+
+    def test_jwt_expired_returns_401(self):
+        """Verificar que token expirado devuelve 401 con mensaje personalizado"""
+        from flask_jwt_extended import create_access_token
+        from datetime import timedelta
+        
+        with self.app.app_context():
+            expired_token = create_access_token(
+                identity='testuser',
+                expires_delta=timedelta(seconds=-1)
+            )
+        
+        res = self.client.get('/protected', headers={
+            'Authorization': f'Bearer {expired_token}'
+        })
+        self.assertEqual(res.status_code, 401)
+        data = json.loads(res.data)
+        self.assertIn('message', data)
+        self.assertIn('Token expirado', data['message'])
+
+    def test_422_handler_exists(self):
+        """Verificar que el handler 422 está configurado"""
+        from werkzeug.exceptions import UnprocessableEntity
+        with self.app.test_request_context():
+            from flask import current_app
+            handler = current_app.error_handler_spec[None].get(422)
+            self.assertIsNotNone(handler)
 
 if __name__ == '__main__':
     unittest.main()

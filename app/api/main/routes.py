@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, render_template
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.extensions import db
+from app.core.extensions import db
 from app.api.auth.models import Users
 
 bp = Blueprint('main', __name__)

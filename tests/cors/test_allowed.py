@@ -3,7 +3,8 @@ import json
 import os
 from app import create_app
 
-class CORSTestCase(unittest.TestCase):
+
+class CORSAllowedOriginsTestCase(unittest.TestCase):
     def setUp(self):
         os.environ['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         os.environ['CORS_ORIGINS'] = 'http://localhost:3000,https://example.com'
@@ -88,6 +89,7 @@ class CORSTestCase(unittest.TestCase):
         })
         self.assertEqual(res.headers['Access-Control-Allow-Origin'], 
                         'http://localhost:3000')
+
 
 if __name__ == '__main__':
     unittest.main()

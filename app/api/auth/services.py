@@ -1,5 +1,5 @@
 from app.api.auth.models import Users, TokenBlocklist
-from app.extensions import db, bcrypt
+from app.core.extensions import db, bcrypt
 from app.core.exceptions import APIException
 from datetime import datetime, timezone
 from flask_jwt_extended import create_access_token, create_refresh_token
@@ -8,7 +8,7 @@ class AuthService:
     @staticmethod
     def register_user(username, email, password):
         if Users.query.filter_by(username=username).first() or Users.query.filter_by(email=email).first():
-            raise APIException("Users already exists", status_code=400)
+            raise APIException("User already exists", status_code=400)
 
         hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
         new_user = Users(username=username, email=email, password_hash=hashed_password)

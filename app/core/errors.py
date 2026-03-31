@@ -57,6 +57,14 @@ def register_error_handlers(app):
             "error": "Unauthorized"
         }), 401
 
+    @app.errorhandler(403)
+    def handle_forbidden(e):
+        return jsonify({
+            "message": "Origin no permitido",
+            "status_code": 403,
+            "error": "Forbidden"
+        }), 403
+
     @app.errorhandler(422)
     def handle_unprocessable_entity(e):
         return jsonify({

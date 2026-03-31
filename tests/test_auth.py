@@ -3,7 +3,7 @@ import json
 import os
 from datetime import datetime, timezone, timedelta
 from app import create_app
-from app.extensions import db
+from app.core.extensions import db
 from app.api.auth.models import TokenBlocklist
 
 class JWTAuthTestCase(unittest.TestCase):
@@ -220,6 +220,24 @@ class JWTAuthTestCase(unittest.TestCase):
             'Authorization': f'Bearer {access_token}'
         })
         self.assertEqual(res.status_code, 401)
+
+    def test_jwt_expired_token(self):
+        """Verificar que token expirado devuelve 401"""
+        from flask_jwt_extended import create_access_token
+        
+        with self.app.app_context():
+            expired_token = create_access_token(
+                identity='testuser',
+                expires_delta=timedelta(seconds=-1)
+            )
+        
+        res = self.client.get('/protected', headers={
+            'Authorization': f'Bearer {expired_token}'
+        })
+        self.assertEqual(res.status_code, 401)
+        data = json.loads(res.data)
+        self.assertIn('message', data)
+        self.assertIn('Token expirado', data['message'])
 
 if __name__ == '__main__':
     unittest.main()
